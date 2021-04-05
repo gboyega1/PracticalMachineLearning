@@ -1,0 +1,111 @@
+---
+title: "Human Activity Recognition"
+author: "Adegboyega Yusuf Ajenifuja"
+date: "24/10/2020"
+output: html_document
+keep_md: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE
+  )
+```
+
+## PROJECT SUMMARY
+
+Devices such as Jawbone Up, Nike FuelBand, and Fitbit now make it possible to collect a large amount of data about personal activity relatively inexpensively.
+People regularly quantify how much of a particular activity they do, but rarely quantify how well they do it.
+We shall utilize data from accelerometers on the belt, forearm, arm, and dumbell of 6 male participants aged between 20 and 28 years who were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+The goal of this project is to predict the manner in which the participants did the exercise. The manner is categorized as follows
+
+1. (Class A), Performing the exercise exactly according to the specification
+
+2. (Class B), throwing the elbows to the front
+
+3. (Class C), lifting the dumbbell only halfway
+
+4. (Class D), lowering the dumbbell only halfway
+
+5. (Class E) and throwing the hips to the front
+
+
+## METHODOLOGY
+
+1 As stated in the project summary, we are trying to predict the manner in which the test subjects performed the exercises. This is represented by the "classe" variable which has 5 distinct values; letters A to E. That makes this a classification problem. We shall build our prediction model using Random Forest.
+
+2. Using Cross Validation, we shall further split the provided training set into a training and test set in the ratio 75:25 so that the testing set provided will be used to validate our model
+
+3. The out of sample error should be 1 less the accuracy of the model
+
+```{r packages, include=FALSE, echo=FALSE}
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(randomForest)
+library(rattle)
+```
+
+## LOAD DATA
+
+Exploring the data in a text editor shows that NA values are coded incorrectly. This we will rectify when loading in the data.
+
+```{r Load Data, cache=TRUE}
+training <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings = c("#DIV/0!", "", "NA"))
+testing <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings = c("#DIV/0!", "", "NA"))
+```
+
+## PARTITION TRAINING DATA INTO TRAINING AND TESTING SETS
+In keeping with model building principles, we shall further split the training set into a training and test set so that the provided test set acts as a validation set. the split shall be done in the ratio 75:25
+```{r Cross Validation}
+set.seed(2345)
+train_part <- createDataPartition(training$classe, p = 0.75, list = FALSE)
+train_sub <- training[train_part,]
+test_sub  <- training[-train_part,]
+```
+
+## SOME PRELIMINARY DATA EXPLORATION ON TRAINING SET
+```{r Glimpse, results='hide'}
+dim(train_sub)
+dim(test_sub)
+str(train_sub)
+```
+We see quite a few columns with NA values in the training data. This is something we should look into as prediction algorithms cannot work with NA values. Lets try to find out the percentage of NA in each column of our training dataframe.
+
+```{r View Percentage NA}
+PERCENT_DAT <- data.frame(COL.NAME = character(), PERCENTAGE_NA = numeric())
+for(i in 1:length(colnames(train_sub))){PERCENT_DAT[i,] <- c(colnames(train_sub)[i], (sum(is.na(train_sub[,i]))/nrow(train_sub))*100)}
+PERCENT_DAT$PERCENTAGE_NA <- as.numeric(PERCENT_DAT$PERCENTAGE_NA)
+PERCENT_DAT <- arrange(PERCENT_DAT, desc(PERCENTAGE_NA))
+data.frame(table(PERCENT_DAT$PERCENTAGE_NA))
+```
+What we see is that only 60 variables have no NA values. All others have NA values in excess of 90% and in some cases 100%, well above the ideal threshold of 60%. We will discard all columns from the training set with excessive number of NA values because if alternatively, we decide to replace the missing values using a method such as K nearest neighbours, the resulting values would not have enough variability thus making them near zero variables.
+
+```{r Discard High Percentage NA}
+train_sub <- select(train_sub, filter(PERCENT_DAT, PERCENTAGE_NA < 90)[,1])
+```
+lets examine the data for near zero variables
+```{r Clean Up}
+nearZeroVar(train_sub, saveMetrics = TRUE)
+```
+the "new_window" variable has been tagged a near Zero predictor and we can thus discard it.
+```{r Remove NearZeroVar}
+train_sub <- train_sub %>%
+  select(!new_window)
+```
+we shall repeat the above procedure for the test_sub and testing sets. 
+
+```{r Discard High Percentage NA for testing set}
+PERCENT_DAT_TEST <- data.frame(COL.NAME = character(), PERCENTAGE_NA = numeric())
+for(i in 1:length(colnames(test_sub))){PERCENT_DAT_TEST[i,] <- c(colnames(test_sub)[i], (sum(is.na(test_sub[,i]))/nrow(test_sub))*100)}
+PERCENT_DAT_TEST$PERCENTAGE_NA <- as.numeric(PERCENT_DAT_TEST$PERCENTAGE_NA)
+PERCENT_DAT_TEST <- arrange(PERCENT_DAT_TEST, desc(PERCENTAGE_NA))
+data.frame(table(PERCENT_DAT_TEST$PERCENTAGE_NA))
+
+test_sub <- select(test_sub, filter(PERCENT_DAT_TEST, PERCENTAGE_NA < 100)[,1])
+
+test_sub <- test_sub %>%
+  select(!new_window)
+```
+
+
