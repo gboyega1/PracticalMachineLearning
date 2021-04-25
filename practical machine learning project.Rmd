@@ -36,14 +36,17 @@ The goal of this project is to predict the manner in which the participants did 
 
 2. Using Cross Validation, we shall further split the provided training set into a training and test set in the ratio 75:25 so that the testing set provided will be used to validate our model
 
-3. The out of sample error should be 1 less the accuracy of the model
+3. Model Building: this is a classification problem and we shall build our prediction algorithm using either random forest or decision trees and this will be heavily dependent on the number of predictors.
+
+3. The out of sample error should be 1 less the accuracy of the prediction model when applied to the test set
 
 ```{r packages, include=FALSE, echo=FALSE}
 library(dplyr)
 library(ggplot2)
 library(caret)
 library(randomForest)
-library(rattle)
+library(parallel)
+library(doParallel)
 ```
 
 ## LOAD DATA
@@ -56,7 +59,7 @@ testing <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-test
 ```
 
 ## PARTITION TRAINING DATA INTO TRAINING AND TESTING SETS
-In keeping with model building principles, we shall further split the training set into a training and test set so that the provided test set acts as a validation set. the split shall be done in the ratio 75:25
+Using cross validation, we shall further split the training set into a training and test set so that the provided test set acts as a validation set. the split shall be done in the ratio 75:25
 ```{r Cross Validation}
 set.seed(2345)
 train_part <- createDataPartition(training$classe, p = 0.75, list = FALSE)
@@ -70,42 +73,88 @@ dim(train_sub)
 dim(test_sub)
 str(train_sub)
 ```
-We see quite a few columns with NA values in the training data. This is something we should look into as prediction algorithms cannot work with NA values. Lets try to find out the percentage of NA in each column of our training dataframe.
+We see quite a few columns with NA values in the training data. This is something we should look into as prediction algorithms cannot work with NA values. Lets try to find out the percentage of NA in each column of the training set.
 
 ```{r View Percentage NA}
-PERCENT_DAT <- data.frame(COL.NAME = character(), PERCENTAGE_NA = numeric())
-for(i in 1:length(colnames(train_sub))){PERCENT_DAT[i,] <- c(colnames(train_sub)[i], (sum(is.na(train_sub[,i]))/nrow(train_sub))*100)}
-PERCENT_DAT$PERCENTAGE_NA <- as.numeric(PERCENT_DAT$PERCENTAGE_NA)
-PERCENT_DAT <- arrange(PERCENT_DAT, desc(PERCENTAGE_NA))
-data.frame(table(PERCENT_DAT$PERCENTAGE_NA))
+percent_na <- sapply(select(train_sub, !c(classe)), function(x) {(sum(is.na(x))/nrow(train_sub))*100})
+data.frame(table(percent_na))
 ```
-What we see is that only 60 variables have no NA values. All others have NA values in excess of 90% and in some cases 100%, well above the ideal threshold of 60%. We will discard all columns from the training set with excessive number of NA values because if alternatively, we decide to replace the missing values using a method such as K nearest neighbours, the resulting values would not have enough variability thus making them near zero variables.
+Excluding the classe variable, we see that Only 59 variables have no NA values. All others have NA values in excess of 90% and in some cases 100%, well above the ideal threshold of 60%. We shall discard all columns from the training set with excessive number of NA values because if alternatively, we decide to replace the missing values using a method such as K nearest neighbours, the resulting values would not have enough variability thus making them near zero variables.
+```{r}
+names_train <- c(names(percent_na[percent_na < 90]), "classe")
+train_sub <- train_sub[,names_train]
+```
 
-```{r Discard High Percentage NA}
-train_sub <- select(train_sub, filter(PERCENT_DAT, PERCENTAGE_NA < 90)[,1])
-```
 lets examine the data for near zero variables
 ```{r Clean Up}
 nearZeroVar(train_sub, saveMetrics = TRUE)
 ```
-the "new_window" variable has been tagged a near Zero predictor and we can thus discard it.
-```{r Remove NearZeroVar}
+the "new_window" variable has been tagged a near Zero predictor but unfortunately, we can't discard it because it's a character variable which the "nearZeroVar" function is not optimized for.
+
+A person's name is highly unlikely to have any bearing on how well they perform an experiment so we shall discard the "user_name" variable.
+From the nearZeroVar output, it shows that all values of the "X" variable are unique. Lets make a plot of the variable to try and find out more about it.
+
+```{r Remove NearZeroVar and Redundant Vars}
 train_sub <- train_sub %>%
-  select(!new_window)
+  select(!c(user_name))
 ```
-we shall repeat the above procedure for the test_sub and testing sets. 
 
-```{r Discard High Percentage NA for testing set}
-PERCENT_DAT_TEST <- data.frame(COL.NAME = character(), PERCENTAGE_NA = numeric())
-for(i in 1:length(colnames(test_sub))){PERCENT_DAT_TEST[i,] <- c(colnames(test_sub)[i], (sum(is.na(test_sub[,i]))/nrow(test_sub))*100)}
-PERCENT_DAT_TEST$PERCENTAGE_NA <- as.numeric(PERCENT_DAT_TEST$PERCENTAGE_NA)
-PERCENT_DAT_TEST <- arrange(PERCENT_DAT_TEST, desc(PERCENTAGE_NA))
-data.frame(table(PERCENT_DAT_TEST$PERCENTAGE_NA))
+```{r}
+ggplot(data = train_sub, mapping = aes(X)) + geom_bar(aes(color = classe))
 
-test_sub <- select(test_sub, filter(PERCENT_DAT_TEST, PERCENTAGE_NA < 100)[,1])
+```
 
-test_sub <- test_sub %>%
-  select(!new_window)
+The bar plot confirms that the X variable values are unique. Take a look at the range of values
+```{r Range train_sub}
+range(train_sub$X)
+```
+this is the number of rows in the initial training dataset. lets also take a look at the range of values in the initial training set as it appears this variable is merely a numbering of the rows
+```{r Range training}
+range(training$X)
+```
+This confirms the suspicion that the X variable is a numbering of the rows in the dataset and we shall thus discard it.
+```{r}
+train_sub <- train_sub %>%
+  select(!c(X))
+```
+
+## MODEL BUILDING
+we are left with 57 possible predictors to build our model from which is still quite a lot. As such we shall utilize the intrinsic feature selection capabilities of the random forest algorithm for building our model. We shall also make use of parallel processing due to the number of variables available which could take some time.
+```{r MODEL BUILDING: CONFIGURE PARALLEL PROCESSING}
+parallel1 <- makeCluster(detectCores() - 1) #this will assign all but 1 of the systems cores to our impending process, leaving 1 for the OS
+registerDoParallel(parallel1)
+```
+
+```{r MODEL BUILDING: CONFIGURE TRAINING OPTIONS}
+trContFit <- trainControl(method = "cv", number = 10, allowParallel = TRUE)
+```
+
+```{r MODEL BUILDING: TRAIN MODEL}
+fit1 <- train(classe ~ ., method = "rf", data = train_sub, trControl = trContFit)
+```
+we have trained the model and can now shut down the cluster
+```{r STOP CLUSTER}
+stopCluster(parallel1)
+registerDoSEQ()
+```
+
+lets view the model
+```{r VIEW MODEL}
+fit1
+fit1$finalModel
+plot(fit1)
+```
+we see that the optimal model was selected using 38 predictors. According to the plot, the accuracy is between 0.9938 and 0.9992 and as stated, it peaks at 38 variables 
+We shall now predict on the test_sub dataset, generate a confusion matrix and attempt to compute the out of sample error
+
+```{r PREDICT}
+pred_test <- predict(fit1, test_sub)
+confMat <- confusionMatrix(pred_test, as.factor(test_sub$classe))
+confMat
+```
+the out of sample error is defined by the proportion of incorrectly predicted samples within the entire sample data which works out to be 1 minus the accuracy (0.9976)
+```{r OUT OF SAMPLE ERROR}
+1-0.9976
 ```
 
 
