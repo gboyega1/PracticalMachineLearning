@@ -212,12 +212,8 @@ summary {
 <p>1 As stated in the project summary, we are trying to predict the manner in which the test subjects performed the exercises. This is represented by the “classe” variable which has 5 distinct values; letters A to E. That makes this a classification problem. We shall build our prediction model using Random Forest.</p>
 <ol start="2" style="list-style-type: decimal">
 <li><p>Using Cross Validation, we shall further split the provided training set into a training and test set in the ratio 75:25 so that the testing set provided will be used to validate our model</p></li>
-<<<<<<< HEAD
 <li><p>Model Building: this is a classification problem and we shall build our prediction algorithm using either random forest or decision trees and this will be heavily dependent on the number of predictors.</p></li>
 <li><p>The out of sample error should be 1 less the accuracy of the prediction model when applied to the test set</p></li>
-=======
-<li><p>The out of sample error should be 1 less the accuracy of the model</p></li>
->>>>>>> 68a919789a82e18e56adc15ffe9949aa65b691ff
 </ol>
 </div>
 <div id="load-data" class="section level2">
@@ -228,11 +224,7 @@ testing &lt;- read.csv(&quot;http://d396qusza40orc.cloudfront.net/predmachlearn/
 </div>
 <div id="partition-training-data-into-training-and-testing-sets" class="section level2">
 <h2>PARTITION TRAINING DATA INTO TRAINING AND TESTING SETS</h2>
-<<<<<<< HEAD
 <p>Using cross validation, we shall further split the training set into a training and test set so that the provided test set acts as a validation set. the split shall be done in the ratio 75:25</p>
-=======
-<p>In keeping with model building principles, we shall further split the training set into a training and test set so that the provided test set acts as a validation set. the split shall be done in the ratio 75:25</p>
->>>>>>> 68a919789a82e18e56adc15ffe9949aa65b691ff
 <pre class="r"><code>set.seed(2345)
 train_part &lt;- createDataPartition(training$classe, p = 0.75, list = FALSE)
 train_sub &lt;- training[train_part,]
@@ -243,22 +235,11 @@ test_sub  &lt;- training[-train_part,]</code></pre>
 <pre class="r"><code>dim(train_sub)
 dim(test_sub)
 str(train_sub)</code></pre>
-<<<<<<< HEAD
 <p>We see quite a few columns with NA values in the training data. This is something we should look into as prediction algorithms cannot work with NA values. Lets try to find out the percentage of NA in each column of the training set.</p>
 <pre class="r"><code>percent_na &lt;- sapply(select(train_sub, !c(classe)), function(x) {(sum(is.na(x))/nrow(train_sub))*100})
 data.frame(table(percent_na))</code></pre>
 <pre><code>##          percent_na Freq
 ## 1                 0   59
-=======
-<p>We see quite a few columns with NA values in the training data. This is something we should look into as prediction algorithms cannot work with NA values. Lets try to find out the percentage of NA in each column of our training dataframe.</p>
-<pre class="r"><code>PERCENT_DAT &lt;- data.frame(COL.NAME = character(), PERCENTAGE_NA = numeric())
-for(i in 1:length(colnames(train_sub))){PERCENT_DAT[i,] &lt;- c(colnames(train_sub)[i], (sum(is.na(train_sub[,i]))/nrow(train_sub))*100)}
-PERCENT_DAT$PERCENTAGE_NA &lt;- as.numeric(PERCENT_DAT$PERCENTAGE_NA)
-PERCENT_DAT &lt;- arrange(PERCENT_DAT, desc(PERCENTAGE_NA))
-data.frame(table(PERCENT_DAT$PERCENTAGE_NA))</code></pre>
-<pre><code>##                Var1 Freq
-## 1                 0   60
->>>>>>> 68a919789a82e18e56adc15ffe9949aa65b691ff
 ## 2  97.9277075689632   67
 ## 3  97.9345019703764    1
 ## 4  97.9412963717896    1
@@ -271,14 +252,9 @@ data.frame(table(PERCENT_DAT$PERCENTAGE_NA))</code></pre>
 ## 11 98.3285772523441    2
 ## 12 98.3353716537573    8
 ## 13              100    6</code></pre>
-<<<<<<< HEAD
 <p>Excluding the classe variable, we see that Only 59 variables have no NA values. All others have NA values in excess of 90% and in some cases 100%, well above the ideal threshold of 60%. We shall discard all columns from the training set with excessive number of NA values because if alternatively, we decide to replace the missing values using a method such as K nearest neighbours, the resulting values would not have enough variability thus making them near zero variables.</p>
 <pre class="r"><code>names_train &lt;- c(names(percent_na[percent_na &lt; 90]), &quot;classe&quot;)
 train_sub &lt;- train_sub[,names_train]</code></pre>
-=======
-<p>What we see is that only 60 variables have no NA values. All others have NA values in excess of 90% and in some cases 100%, well above the ideal threshold of 60%. We will discard all columns from the training set with excessive number of NA values because if alternatively, we decide to replace the missing values using a method such as K nearest neighbours, the resulting values would not have enough variability thus making them near zero variables.</p>
-<pre class="r"><code>train_sub &lt;- select(train_sub, filter(PERCENT_DAT, PERCENTAGE_NA &lt; 90)[,1])</code></pre>
->>>>>>> 68a919789a82e18e56adc15ffe9949aa65b691ff
 <p>lets examine the data for near zero variables</p>
 <pre class="r"><code>nearZeroVar(train_sub, saveMetrics = TRUE)</code></pre>
 <pre><code>##                      freqRatio percentUnique zeroVar   nzv
@@ -342,7 +318,6 @@ train_sub &lt;- train_sub[,names_train]</code></pre>
 ## magnet_forearm_y      1.190476   12.44054899   FALSE FALSE
 ## magnet_forearm_z      1.043478   11.07487430   FALSE FALSE
 ## classe                1.469452    0.03397201   FALSE FALSE</code></pre>
-<<<<<<< HEAD
 <p>the “new_window” variable has been tagged a near Zero predictor but unfortunately, we can’t discard it because it’s a character variable which the “nearZeroVar” function is not optimized for.</p>
 <p>A person’s name is highly unlikely to have any bearing on how well they perform an experiment so we shall discard the “user_name” variable. From the nearZeroVar output, it shows that all values of the “X” variable are unique. Lets make a plot of the variable to try and find out more about it.</p>
 <pre class="r"><code>train_sub &lt;- train_sub %&gt;%
@@ -445,32 +420,6 @@ confMat</code></pre>
 <p>the out of sample error is defined by the proportion of incorrectly predicted samples within the entire sample data which works out to be 1 minus the accuracy (0.9976)</p>
 <pre class="r"><code>1-0.9976</code></pre>
 <pre><code>## [1] 0.0024</code></pre>
-=======
-<p>the “new_window” variable has been tagged a near Zero predictor and we can thus discard it.</p>
-<pre class="r"><code>train_sub &lt;- train_sub %&gt;%
-  select(!new_window)</code></pre>
-<p>we shall repeat the above procedure for the test_sub and testing sets.</p>
-<pre class="r"><code>PERCENT_DAT_TEST &lt;- data.frame(COL.NAME = character(), PERCENTAGE_NA = numeric())
-for(i in 1:length(colnames(test_sub))){PERCENT_DAT_TEST[i,] &lt;- c(colnames(test_sub)[i], (sum(is.na(test_sub[,i]))/nrow(test_sub))*100)}
-PERCENT_DAT_TEST$PERCENTAGE_NA &lt;- as.numeric(PERCENT_DAT_TEST$PERCENTAGE_NA)
-PERCENT_DAT_TEST &lt;- arrange(PERCENT_DAT_TEST, desc(PERCENTAGE_NA))
-data.frame(table(PERCENT_DAT_TEST$PERCENTAGE_NA))</code></pre>
-<pre><code>##                Var1 Freq
-## 1                 0   60
-## 2  97.9404567699837   74
-## 3  97.9608482871126    5
-## 4  98.0016313213703    2
-## 5  98.1647634584013    2
-## 6  98.3278955954323    2
-## 7  98.3482871125612    2
-## 8  98.4298531810767    5
-## 9  98.4502446982056    2
-## 10              100    6</code></pre>
-<pre class="r"><code>test_sub &lt;- select(test_sub, filter(PERCENT_DAT_TEST, PERCENTAGE_NA &lt; 100)[,1])
-
-test_sub &lt;- test_sub %&gt;%
-  select(!new_window)</code></pre>
->>>>>>> 68a919789a82e18e56adc15ffe9949aa65b691ff
 </div>
 
 
